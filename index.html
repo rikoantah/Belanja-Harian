@@ -8,6 +8,8 @@
     :root {
       --primary: #10B981;
       --primary-dark: #059669;
+      --wa-color: #25D366;
+      --wa-dark: #128C7E;
       --bg: #F3F4F6;
       --card-bg: #FFFFFF;
       --text: #1F2937;
@@ -138,6 +140,28 @@
       background: var(--primary-dark);
     }
 
+    .btn-wa {
+      width: 100%;
+      background: var(--wa-color);
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.2s;
+    }
+
+    .btn-wa:hover {
+      background: var(--wa-dark);
+    }
+
     .result-card {
       display: none;
     }
@@ -186,9 +210,9 @@
     <div class="card">
       <div class="section-title">1. Pilih Budget</div>
       <div class="button-group">
-        <button class="btn-budget active" onclick="selectBudget(50000)">50rb</button>
-        <button class="btn-budget" onclick="selectBudget(75000)">75rb</button>
-        <button class="btn-budget" onclick="selectBudget(100000)">100rb</button>
+        <button class="btn-budget active" onclick="selectBudget(50000, this)">50rb</button>
+        <button class="btn-budget" onclick="selectBudget(75000, this)">75rb</button>
+        <button class="btn-budget" onclick="selectBudget(100000, this)">100rb</button>
       </div>
 
       <div class="section-title">2. Mode Menu</div>
@@ -201,7 +225,7 @@
     </div>
 
     <div class="card loading" id="loading">
-      Memuat menu masakan...
+      ⚡ Memuat menu masakan...
     </div>
 
     <div class="card result-card" id="resultCard">
@@ -226,20 +250,24 @@
         <div class="item-label">Cara Masak</div>
         <div class="item-value" id="resMasak">-</div>
       </div>
+
+      <button class="btn-wa" onclick="sendToWhatsApp()">
+        📲 Kirim Ke WhatsApp
+      </button>
     </div>
   </div>
 
   <script>
-    // MASUKKAN URL WEB APP GAS ANDA DI SINI
-    const GAS_URL = "https://script.google.com/macros/s/AKfycby6UKJedtFoFDQCNM3F2zG4sUk2CV8PqEDFVot5tMNMDoOZZ4CODz7C2wd073-HeYqv/exec";
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbwE8qyt9KdDPU24ZCBEZhScDjQPrnw6W2SgJYNwh68ZPvNG2nr1axqBd4OLYrkAboBl/exec";
 
     let selectedBudget = 50000;
     let selectedMode = 'hari_ini';
+    let currentData = null;
 
-    function selectBudget(amount) {
+    function selectBudget(amount, el) {
       selectedBudget = amount;
       document.querySelectorAll('.btn-budget').forEach(btn => btn.classList.remove('active'));
-      event.target.classList.add('active');
+      el.classList.add('active');
     }
 
     function selectMode(mode) {
@@ -248,42 +276,54 @@
       document.getElementById('btn-acak').classList.toggle('active', mode === 'acak');
     }
 
-    async function getRecommendation() {
-      if (GAS_URL.includes("GANTI_DENGAN_URL")) {
-        alert("Silakan masukkan URL Web App Google Apps Script pada variabel GAS_URL terlebih dahulu.");
-        return;
-      }
-
+    function getRecommendation() {
       const loading = document.getElementById('loading');
       const resultCard = document.getElementById('resultCard');
 
       loading.style.display = 'block';
       resultCard.style.display = 'none';
 
-      try {
-        const response = await fetch(GAS_URL, {
-          method: 'POST',
-          body: JSON.stringify({ budget: selectedBudget, mode: selectedMode })
+      // Menggunakan GET dengan timestamp agar instan dan tanpa cache
+      const requestUrl = `${GAS_URL}?budget=${selectedBudget}&mode=${selectedMode}&t=${new Date().getTime()}`;
+
+      fetch(requestUrl)
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === 'success') {
+            currentData = data;
+            document.getElementById('resNamaMenu').innerText = data.namaMenu;
+            document.getElementById('resLauk').innerText = data.laukUtama;
+            document.getElementById('resSayur').innerText = data.sayuran;
+            document.getElementById('resBelanja').innerText = data.rincianBelanja;
+            document.getElementById('resMasak').innerText = data.caraMasak;
+
+            resultCard.style.display = 'block';
+          } else {
+            alert("Pesan: " + data.message);
+          }
+        })
+        .catch(err => {
+          alert("Gagal memuat data. Pastikan Web App GAS dideploy dengan versi terbaru.");
+        })
+        .finally(() => {
+          loading.style.display = 'none';
         });
+    }
 
-        const data = await response.json();
+    function sendToWhatsApp() {
+      if (!currentData) return;
 
-        if (data.status === 'success') {
-          document.getElementById('resNamaMenu').innerText = data.namaMenu;
-          document.getElementById('resLauk').innerText = data.laukUtama;
-          document.getElementById('resSayur').innerText = data.sayuran;
-          document.getElementById('resBelanja').innerText = data.rincianBelanja;
-          document.getElementById('resMasak').innerText = data.caraMasak;
+      const text = `🛒 *CATATAN BELANJA HARIAN* 🛒\n` +
+                   `==========================\n` +
+                   `📌 *Menu:* ${currentData.namaMenu}\n` +
+                   `💰 *Budget:* Rp ${Number(currentData.budget).toLocaleString('id-ID')}\n\n` +
+                   `🍗 *Lauk Utama:* ${currentData.laukUtama}\n` +
+                   `🥬 *Sayuran:* ${currentData.sayuran}\n\n` +
+                   `📝 *Rincian Belanja:* \n${currentData.rincianBelanja}\n\n` +
+                   `🍳 *Cara Masak:* \n${currentData.caraMasak}`;
 
-          resultCard.style.display = 'block';
-        } else {
-          alert("Error: " + data.message);
-        }
-      } catch (err) {
-        alert("Gagal terhubung ke server. Pastikan URL GAS sudah benar.");
-      } finally {
-        loading.style.display = 'none';
-      }
+      const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+      window.open(waUrl, '_blank');
     }
   </script>
 </body>
